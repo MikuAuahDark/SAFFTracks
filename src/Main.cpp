@@ -1,9 +1,6 @@
 // Inject stuff
 
-#include <chrono>
-#include <condition_variable>
-#include <mutex>
-#include <thread>
+#include <string>
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -14,29 +11,8 @@ extern "C"
 #include "libavformat/avformat.h"
 }
 
-static int state = 0; // 0 = not init; 1 = wait 5s; 2 = running
-static std::thread mainThread;
-static std::condition_variable cv;
-
 void main();
 void unload();
-
-void preMain()
-{
-	std::mutex mutex;
-	std::unique_lock<std::mutex> lock(mutex);
-
-	// Wait for 5 seconds.
-	// The reason we have to wait 5 seconds is to let SilentPatch
-	// patches their stuff first, then we do our patches.
-	state = 1;
-	if (cv.wait_for(lock, std::chrono::seconds(1)) == std::cv_status::timeout)
-	{
-		state = 2;
-		// Proceed
-		main();
-	}
-}
 
 BOOL WINAPI DllMain(HINSTANCE _, DWORD why, LPVOID __)
 {
@@ -44,23 +20,13 @@ BOOL WINAPI DllMain(HINSTANCE _, DWORD why, LPVOID __)
 	{
 		case DLL_PROCESS_ATTACH:
 		{
-			if (state == 0)
-			{
-				DWORD test = QueueUserAPC([](ULONG_PTR _)
-				{
-					mainThread = std::thread(preMain);
-					mainThread.detach();
-				}, GetCurrentThread(), 0);
-				printf("%d", test);
-			}
+			main();
+			break;
 		}
 		case DLL_PROCESS_DETACH:
 		{
-			cv.notify_one();
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			
-			if (state == 2)
-				unload();
+			unload();
+			break;
 		}
 	}
 
