@@ -66,7 +66,8 @@ HRESULT __stdcall CAEDataStream::Write(const void* src, ULONG size, ULONG* writt
 
 HRESULT __stdcall CAEDataStream::Seek(LARGE_INTEGER offset, DWORD whence, ULARGE_INTEGER* newOffset)
 {
-	return E_NOTIMPL;
+	using SeekFunc = HRESULT(__stdcall *)(CAEDataStream*, LARGE_INTEGER, DWORD, ULARGE_INTEGER*);
+	return ((SeekFunc) (gtasaBase + 0xdc340))(this, offset, whence, newOffset);
 }
 
 HRESULT __stdcall CAEDataStream::SetSize(ULARGE_INTEGER newsize)
@@ -110,15 +111,15 @@ HRESULT __stdcall CAEDataStream::Clone(IStream** target)
 	return E_NOTIMPL;
 }
 
-int CAEDataStream::FillBuffer(void* dest, ULONG size)
+size_t CAEDataStream::FillBuffer(void *dest, size_t size)
 {
-	using FillFunc = int(__thiscall*)(CAEDataStream*, void*, ULONG);
+	using FillFunc = size_t(__thiscall*)(CAEDataStream*, void*, size_t);
 	return ((FillFunc) (gtasaBase + 0xdc1c0))(this, dest, size);
 }
 
-LONG CAEDataStream::GetCurrentPosition()
+unsigned long CAEDataStream::GetCurrentPosition()
 {
-	return ((LONG(__thiscall*)(CAEDataStream*)) (gtasaBase + 0xdc230))(this);
+	return ((unsigned long(__thiscall*)(CAEDataStream*)) (gtasaBase + 0xdc230))(this);
 }
 
 bool CAEDataStream::Initialise()
