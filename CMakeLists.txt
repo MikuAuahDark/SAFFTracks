@@ -78,7 +78,7 @@ add_library(SAFFTracks MODULE
 	src/CAEDataStream.cpp
 	src/CAELAVDecoder.cpp
 	src/CAEStreamingDecoder.cpp
-	src/CUtrax.cpp
+	src/CAEUserRadioTrackManager.cpp
 	src/Main.cpp
 	src/SADefaultAllocator.cpp
 )

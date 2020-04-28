@@ -46,7 +46,19 @@ public:
 	int GetSampleRate() override;
 	int GetStreamID() override;
 
+	struct Metadata
+	{
+		const char
+			*filename,
+			*title,
+			*artist,
+			*album,
+			*genre;
+	};
+
 private:
+	char signature[4];
+	Metadata metadata;
 	AVFormatContext *formatContext;
 	AVCodecContext *codecContext;
 	AVIOContext *ioContext;

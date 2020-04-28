@@ -54,6 +54,7 @@ static int64_t seekFromDataStream(void *opaque, int64_t offset, int whence)
 
 CAELAVDecoder::CAELAVDecoder(CAEDataStream* dataStream)
 : CAEStreamingDecoder(dataStream)
+, signature("LAV")
 , formatContext(nullptr)
 , codecContext(nullptr)
 , ioContext(nullptr)
@@ -80,6 +81,12 @@ CAELAVDecoder::CAELAVDecoder(CAEDataStream* dataStream)
 	packet = av_packet_alloc();
 	if (packet == nullptr) return;
 
+	// Setup metadata
+	memset(&metadata, 0, sizeof(Metadata));
+	metadata.filename = strrchr(dataStream->filename, '\\');
+	if (metadata.filename == nullptr)
+		metadata.filename = dataStream->filename;
+
 	init0 = true;
 }
 
@@ -100,11 +107,14 @@ CAELAVDecoder::~CAELAVDecoder()
 		av_freep(&ioContext->buffer);
 		avio_context_free(&ioContext);
 	}
+	
+	// No need to clear metadata, the memory is owned by libavformat
 }
 
 bool CAELAVDecoder::Initialise()
 {
 	if (!init0) return false;
+	if (init) return true;
 
 	formatContext->pb = ioContext;
 	formatContext->flags |= AVFMT_FLAG_CUSTOM_IO;
@@ -116,6 +126,22 @@ bool CAELAVDecoder::Initialise()
 	// Retrieve stream info
 	if (avformat_find_stream_info(formatContext, nullptr) < 0)
 		return false;
+
+	// Retrieve metadata
+	AVDictionaryEntry *tag = nullptr;
+	while ((tag = av_dict_get(formatContext->metadata, "", tag, AV_DICT_IGNORE_SUFFIX)))
+	{
+		if (metadata.title == nullptr && strcmpi(tag->key, "title") == 0)
+			metadata.title = tag->value;
+		else if (metadata.artist == nullptr && strcmpi(tag->key, "artist") == 0)
+			metadata.artist = tag->value;
+		else if (metadata.album == nullptr && strcmpi(tag->key, "album") == 0)
+			metadata.album = tag->value;
+		else if (metadata.genre == nullptr && strcmpi(tag->key, "genre") == 0)
+			metadata.genre = tag->value;
+		else if (metadata.title && metadata.artist && metadata.album && metadata.genre)
+			break;
+	}
 
 	// Find audio stream
 	for (int i = 0; i < formatContext->nb_streams; i++)
