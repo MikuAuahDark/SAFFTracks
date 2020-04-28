@@ -22,50 +22,29 @@
 
 #include <cstdint>
 
-#include "CUtrax.hpp"
+#include "CAEUserRadioTrackManager.hpp"
 
 extern uintptr_t gtasaBase;
 
-CUtrax* CUtrax::GetInstance()
+CAEUserRadioTrackManager* CAEUserRadioTrackManager::GetInstance()
 {
-	static CUtrax *instance = nullptr;
+	static CAEUserRadioTrackManager *instance = nullptr;
 	if (instance == nullptr)
-		instance = (CUtrax *) (gtasaBase + 0x76b970);
+		instance = (CAEUserRadioTrackManager *) (gtasaBase + 0x76b970);
 	return instance;
 }
 
-bool CUtrax::LoadQuickTime()
+char* CAEUserRadioTrackManager::GetTrackPath(int trackID)
 {
-	return ((bool(__thiscall*)(CUtrax*)) (gtasaBase + 0xe7c70))(this);
+	return ((char*(__thiscall*)(CAEUserRadioTrackManager*, int)) (gtasaBase + 0xf3050))(this, trackID);
 }
 
-bool CUtrax::ReadSaUtraxDat()
+bool CAEUserRadioTrackManager::Initialise()
 {
-	return ((bool(__thiscall*)(CUtrax*)) (gtasaBase + 0xf2fd0))(this);
+	return ((bool(__thiscall*)(CAEUserRadioTrackManager*)) (gtasaBase + 0xf35b0))(this);
 }
 
-char* CUtrax::GetTrackPath(int trackID)
+CAEStreamingDecoder* CAEUserRadioTrackManager::LoadUserTrack(int trackID)
 {
-	return ((char*(__thiscall*)(CUtrax*, int)) (gtasaBase + 0xf3050))(this, trackID);
-}
-
-bool CUtrax::Initialize()
-{
-	return ((bool(__thiscall*)(CUtrax*)) (gtasaBase + 0xf35b0))(this);
-}
-
-CAEStreamingDecoder* CUtrax::LoadUserTrack(int trackID)
-{
-	return ((CAEStreamingDecoder*(__thiscall*)(CUtrax*, int)) (gtasaBase + 0xf35f0))(this, trackID);
-}
-
-bool CUtrax::StartWriteUtraxThread()
-{
-	return ((bool(__thiscall*)(CUtrax*)) (gtasaBase + 0xf4ba0))(this);
-}
-
-DWORD __stdcall CUtrax::WriteUtraxThread()
-{
-	using WriteFunc = DWORD(__stdcall *)(CUtrax*);
-	return ((WriteFunc) (gtasaBase + 0xf4a20))(this);
+	return ((CAEStreamingDecoder*(__thiscall*)(CAEUserRadioTrackManager*, int)) (gtasaBase + 0xf35f0))(this, trackID);
 }

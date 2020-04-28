@@ -20,15 +20,15 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef _CUTRAX_H_
-#define _CUTRAX_H_
+#ifndef _CAEUSERRADIOTRACKMANAGER_H_
+#define _CAEUSERRADIOTRACKMANAGER_H_
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 #include "CAEStreamingDecoder.hpp"
 
-class CUtrax
+class CAEUserRadioTrackManager
 {
 public:
 	struct Track
@@ -38,24 +38,16 @@ public:
 		int decoderID;
 	};
 
-	static CUtrax *GetInstance();
+	static CAEUserRadioTrackManager *GetInstance();
 	// No destructor
-	~CUtrax() = delete;
+	~CAEUserRadioTrackManager() = delete;
 
-	// 0x4e7c70
-	bool LoadQuickTime();
-	// 0x4f2fd0
-	bool ReadSaUtraxDat();
 	// 0x4f3050
 	char *GetTrackPath(int trackID);
 	// 0x4f35b0
-	bool Initialize();
+	bool Initialise();
 	// 0x4f35f0
 	CAEStreamingDecoder *LoadUserTrack(int trackID);
-	// 0x4f4ba0
-	bool StartWriteUtraxThread();
-	// 0x4f4a20
-	DWORD __stdcall WriteUtraxThread();
 
 	// IF YOU WANT TO EXPORT THIS FILE TO YOUR REVERSING PROJECT
 	// MAKE SURE YOU REMOVE THIS ONE FUNCTION BECAUSE IT'S USED
@@ -87,7 +79,7 @@ public:
 
 private:
 	// No constructor
-	CUtrax();
+	CAEUserRadioTrackManager();
 };
 
 #endif

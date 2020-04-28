@@ -62,7 +62,7 @@ BOOL WINAPI DllMain(HINSTANCE _, DWORD why, LPVOID __)
 
 #include "CAEDataStream.hpp"
 #include "CAELAVDecoder.hpp"
-#include "CUtrax.hpp"
+#include "CAEUserRadioTrackManager.hpp"
 
 static bool silentPatched = false; // true if SilentPatch patches a function
 static bool patched[] = {
@@ -73,11 +73,11 @@ static bool patched[] = {
 
 uintptr_t gtasaBase = 0;
 
-// Our function to override CUtrax::LoadUserTrack
-CAEStreamingDecoder *CUtrax::LoadUserTrackOverride(int trackID)
+// Our function to override CAEUserRadioTrackManager::LoadUserTrack
+CAEStreamingDecoder *CAEUserRadioTrackManager::LoadUserTrackOverride(int trackID)
 {
-	// To be honest this is 70% rewrite of CUtrax::LoadUserTrack method
-	CUtrax &inst = *CUtrax::GetInstance();
+	// To be honest this is 70% rewrite of CAEUserRadioTrackManager::LoadUserTrack method
+	CAEUserRadioTrackManager &inst = *CAEUserRadioTrackManager::GetInstance();
 
 	if (inst.utraxLoaded1 == false)
 		return nullptr;
@@ -183,7 +183,7 @@ int __stdcall getAudioFileTypeOverride(const char *str)
 			return 3;
 		// MP3 is 4 if system has QuickTime, 3 otherwise.
 		case AV_CODEC_ID_MP3:
-			return CUtrax::GetInstance()->decoderSupported.quickTimeSupported ? 4 : 3;
+			return CAEUserRadioTrackManager::GetInstance()->decoderSupported.quickTimeSupported ? 4 : 3;
 		// AAC
 		case AV_CODEC_ID_AAC:
 			return 4;
@@ -231,10 +231,10 @@ void main()
 		patched[0] = true;
 	}
 
-	// Toggle decoder ID 6 to true in CUtrax singleton
-	CUtrax::GetInstance()->decoderSupported.decoderSupportedArray[6] = patched[1] = true;
+	// Toggle decoder ID 6 to true in CAEUserRadioTrackManager singleton
+	CAEUserRadioTrackManager::GetInstance()->decoderSupported.decoderSupportedArray[6] = patched[1] = true;
 
-	// Patch CUtrax::LoadUserTrack (0x4f35f0) to CUtrax::LoadUserTrackOverride
+	// Patch CAEUserRadioTrackManager::LoadUserTrack (0x4f35f0) to CAEUserRadioTrackManager::LoadUserTrackOverride
 	{
 		DWORD oldProt = 0;
 		DWORD newProt = PAGE_READWRITE;
@@ -245,7 +245,7 @@ void main()
 
 		uintptr_t loadUserTrackOverride;
 		__asm { // why
-			mov eax, (CUtrax::LoadUserTrackOverride)
+			mov eax, (CAEUserRadioTrackManager::LoadUserTrackOverride)
 			mov loadUserTrackOverride, eax
 		}
 		uintptr_t jumpAddr = loadUserTrackOverride - (gtasaBase + 0xf35f0) - 5;
@@ -264,7 +264,7 @@ void main()
 void unload()
 {
 	// From reverse order
-	// Restore CUtrax::LoadUserTrack patch
+	// Restore CAEUserRadioTrackManager::LoadUserTrack patch
 	if (patched[2])
 	{
 		DWORD oldProt = 0;
@@ -286,7 +286,7 @@ void unload()
 
 	// Set decoder ID 6 to false
 	if (patched[1])
-		patched[1] = CUtrax::GetInstance()->decoderSupported.decoderSupportedArray[6] = false;
+		patched[1] = CAEUserRadioTrackManager::GetInstance()->decoderSupported.decoderSupportedArray[6] = false;
 
 	// Revert patch 0x4f31f0
 	if (patched[0])
