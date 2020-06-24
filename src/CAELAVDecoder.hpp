@@ -39,7 +39,7 @@ public:
 	~CAELAVDecoder() override;
 	
 	bool Initialise() override;
-	unsigned long FillBuffer(void *dest, size_t size) override;
+	size_t FillBuffer(void *dest, size_t size) override;
 	long GetStreamLengthMs() override;
 	long GetStreamPlayTimeMs() override;
 	void SetCursor(unsigned long pos) override;

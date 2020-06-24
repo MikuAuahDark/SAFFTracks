@@ -52,7 +52,7 @@ static int64_t seekFromDataStream(void *opaque, int64_t offset, int whence)
 	}
 }
 
-CAELAVDecoder::CAELAVDecoder(CAEDataStream* dataStream)
+CAELAVDecoder::CAELAVDecoder(CAEDataStream *dataStream)
 : CAEStreamingDecoder(dataStream)
 , signature("LAV")
 , formatContext(nullptr)
@@ -86,6 +86,8 @@ CAELAVDecoder::CAELAVDecoder(CAEDataStream* dataStream)
 	metadata.filename = strrchr(dataStream->filename, '\\');
 	if (metadata.filename == nullptr)
 		metadata.filename = dataStream->filename;
+	else
+		metadata.filename++;
 
 	init0 = true;
 }
@@ -202,13 +204,10 @@ bool CAELAVDecoder::Initialise()
 	if (swr_init(resampler) < 0)
 		return false;
 
-	// Rewind
-	SetCursor(0);
-
 	return init = true;
 }
 
-unsigned long CAELAVDecoder::FillBuffer(void* dest, size_t size)
+size_t CAELAVDecoder::FillBuffer(void *dest, size_t size)
 {
 	// We always assume s16 and 2 channels, hence division by 4
 	int sampleCount = size >> 2;
@@ -289,7 +288,7 @@ void CAELAVDecoder::SetCursor(unsigned long pos)
 		return;
 
 	// Convert to stream-specific timestamp
-	int64_t ts = pos * timeBase.den / (timeBase.num * 1000);
+	int64_t ts = int64_t(pos) * timeBase.den / (timeBase.num * 1000);
 	// Flush decode buffers
 	avcodec_flush_buffers(codecContext);
 	
