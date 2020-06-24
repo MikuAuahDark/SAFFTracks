@@ -19,7 +19,7 @@ Requirements:
 
 * CMake 3.1 or later
 
-* GTASA US 1.0 HOODLUM
+* GTASA US 1.0 HOODLUM/Compact
 
 Ensure you build FFmpeg first, then use CMake to compile the project.
 
