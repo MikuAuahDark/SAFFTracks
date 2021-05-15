@@ -146,13 +146,14 @@ bool CAELAVDecoder::Initialise()
 	}
 
 	// Find audio stream
-	for (int i = 0; i < formatContext->nb_streams; i++)
+	for (int i = 0; targetIndex == -1 && i < formatContext->nb_streams; i++)
 	{
-		if (formatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
+		if (formatContext->streams[i]->codecpar->codec_type == AVMediaType::AVMEDIA_TYPE_AUDIO)
 			targetIndex = i;
 		else
-			formatContext->streams[i]->discard = AVDISCARD_ALL;
+			formatContext->streams[i]->discard = AVDiscard::AVDISCARD_ALL;
 	}
+
 	if (targetIndex == -1)
 		// No audio stream, probably video-only file lol
 		return false;
@@ -288,7 +289,7 @@ void CAELAVDecoder::SetCursor(unsigned long pos)
 		return;
 
 	// Convert to stream-specific timestamp
-	int64_t ts = int64_t(pos) * timeBase.den / (timeBase.num * 1000);
+	int64_t ts = int64_t(pos) * timeBase.den / (timeBase.num * 1000ULL);
 	// Flush decode buffers
 	avcodec_flush_buffers(codecContext);
 	
@@ -298,7 +299,8 @@ void CAELAVDecoder::SetCursor(unsigned long pos)
 		int outSize = swr_get_out_samples(resampler, 0);
 		if (outSize > 0)
 		{
-			uint8_t *buffers[2] = {(uint8_t *) av_malloc(outSize), nullptr};
+			// s16, 2 channels, lshift by 2
+			uint8_t *buffers[2] = {(uint8_t *) av_malloc(outSize << 2), nullptr};
 			swr_convert(resampler, buffers, outSize, nullptr, 0);
 			av_free(buffers[0]);
 		}
