@@ -66,7 +66,7 @@ private:
 	AVFrame *frame;
 	SwrContext *resampler;
 
-	int targetIndex;
+	unsigned int targetIndex;
 	int sampleRate;
 	bool init0;
 	bool init;

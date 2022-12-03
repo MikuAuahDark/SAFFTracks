@@ -15,7 +15,7 @@ Building
 
 Requirements:
 
-* FFmpeg 4.0 or later, compiled for Windows 32-bit
+* FFmpeg 5.1 or later, compiled for Windows 32-bit
 
 * CMake 3.1 or later
 
@@ -25,11 +25,13 @@ Ensure you build FFmpeg first, then use CMake to compile the project.
 
 ```cmd
 rem assume %FFMPEG% contain path where it has "lib" and "include"
-cmake -Bbuild -H. -T v141_xp -A Win32 -DLIBAV_LIB_DIR=%FFMPEG%\lib -DLIBAV_INCLUDE_DIR=%FFMPEG%\include -DCMAKE_INSTALL_PREFIX=%CD%\install
+cmake -Bbuild -H. -A Win32 -DLIBAV_LIB_DIR=%FFMPEG%\lib -DLIBAV_INCLUDE_DIR=%FFMPEG%\include -DCMAKE_INSTALL_PREFIX=%CD%\install
 cmake --build build --config Release --target install
 ```
 
 You'll found the ASI plugin in `install`.
+
+Protip: You can also set `CMAKE_INSTALL_PREFIX` to your GTASA installation directory.
 
 Installation
 -----

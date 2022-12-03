@@ -52,6 +52,21 @@ static int64_t seekFromDataStream(void *opaque, int64_t offset, int whence)
 	}
 }
 
+inline AVChannelLayout makeNativeChannelLayout(int nchannels, uint64_t mask)
+{
+	AVChannelLayout layout {};
+	layout.order = AV_CHANNEL_ORDER_NATIVE;
+	layout.nb_channels = nchannels;
+	layout.opaque = nullptr;
+	layout.u.mask = mask;
+	return layout;
+}
+
+#ifdef AV_CHANNEL_LAYOUT_MASK
+#undef AV_CHANNEL_LAYOUT_MASK
+#define AV_CHANNEL_LAYOUT_MASK makeNativeChannelLayout
+#endif
+
 CAELAVDecoder::CAELAVDecoder(CAEDataStream *dataStream)
 : CAEStreamingDecoder(dataStream)
 , signature("LAV")
@@ -61,7 +76,7 @@ CAELAVDecoder::CAELAVDecoder(CAEDataStream *dataStream)
 , packet(nullptr)
 , frame(nullptr)
 , resampler(nullptr)
-, targetIndex(-1)
+, targetIndex((unsigned int) -1)
 , sampleRate(0)
 , init0(false)
 , init(false)
@@ -146,7 +161,7 @@ bool CAELAVDecoder::Initialise()
 	}
 
 	// Find audio stream
-	for (int i = 0; targetIndex == -1 && i < formatContext->nb_streams; i++)
+	for (unsigned int i = 0; targetIndex == (unsigned int) -1 && i < formatContext->nb_streams; i++)
 	{
 		if (formatContext->streams[i]->codecpar->codec_type == AVMediaType::AVMEDIA_TYPE_AUDIO)
 			targetIndex = i;
@@ -154,13 +169,13 @@ bool CAELAVDecoder::Initialise()
 			formatContext->streams[i]->discard = AVDiscard::AVDISCARD_ALL;
 	}
 
-	if (targetIndex == -1)
+	if (targetIndex == (unsigned int) -1)
 		// No audio stream, probably video-only file lol
 		return false;
 
 	// Find decoder for this codec
 	AVCodecParameters *param = formatContext->streams[targetIndex]->codecpar;
-	AVCodec *codec = avcodec_find_decoder(param->codec_id);
+	const AVCodec *codec = avcodec_find_decoder(param->codec_id);
 	if (codec == nullptr)
 		return false;
 
@@ -187,18 +202,17 @@ bool CAELAVDecoder::Initialise()
 		return init = false;
 	init = false;
 
+	AVChannelLayout stereo = AV_CHANNEL_LAYOUT_STEREO;
 	sampleRate = frame->sample_rate > 48000 ? 48000 : frame->sample_rate;
 	// Setup swr
-	resampler = swr_alloc_set_opts(nullptr,
+	if (swr_alloc_set_opts2(&resampler,
 		// output options
-		AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_S16, sampleRate,
+		&stereo, AV_SAMPLE_FMT_S16, sampleRate,
 		// input options
-		frame->channel_layout, (AVSampleFormat) frame->format, frame->sample_rate,
+		&frame->ch_layout, (AVSampleFormat) frame->format, frame->sample_rate,
 		// dunno
 		0, nullptr
-	);
-	// Failed?
-	if (resampler == nullptr)
+	) != 0)
 		return false;
 
 	// Initialize resampler
