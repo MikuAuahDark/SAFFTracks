@@ -196,11 +196,9 @@ bool CAELAVDecoder::Initialise()
 	if (!ReadFrame(frame))
 		return false;
 
-	init = true;
 	// Let's obey GTASA checks. If duration < 7s then false
-	if (GetStreamLengthMs() < 7000)
-		return init = false;
-	init = false;
+	if (GetStreamLength() < 7.0)
+		return false;
 
 	AVChannelLayout stereo = AV_CHANNEL_LAYOUT_STEREO;
 	sampleRate = frame->sample_rate > 48000 ? 48000 : frame->sample_rate;
@@ -251,34 +249,7 @@ size_t CAELAVDecoder::FillBuffer(void *dest, size_t size)
 long CAELAVDecoder::GetStreamLengthMs()
 {
 	if (init)
-	{
-		AVStream *temp = formatContext->streams[targetIndex];
-		AVRational timeBase;
-		int64_t duration;
-
-		if (temp->duration == AV_NOPTS_VALUE)
-		{
-			if (formatContext->duration == AV_NOPTS_VALUE)
-				// TODO: Enumerate all frames?
-				return -1;
-			else
-			{
-				timeBase = {1, AV_TIME_BASE};
-				duration = formatContext->duration;
-			}
-		}
-		else
-		{
-			timeBase = temp->time_base;
-			duration = temp->duration;
-		}
-
-		// Cannot divide by 0
-		if (timeBase.den == 0)
-			return -1;
-		else
-			return (long) (duration * timeBase.num * 1000 / timeBase.den);
-	}
+		return (long) (GetStreamLength() * 1000.0);
 	else
 		return -1;
 }
@@ -375,4 +346,34 @@ bool CAELAVDecoder::ReadFrame(AVFrame *frame)
 			return true;
 		}
 	}
+}
+
+double CAELAVDecoder::GetStreamLength()
+{
+	AVStream *temp = formatContext->streams[targetIndex];
+	AVRational timeBase;
+	int64_t duration;
+
+	if (temp->duration == AV_NOPTS_VALUE)
+	{
+		if (formatContext->duration == AV_NOPTS_VALUE)
+			// TODO: Enumerate all frames?
+			return -1;
+		else
+		{
+			timeBase = {1, AV_TIME_BASE};
+			duration = formatContext->duration;
+		}
+	}
+	else
+	{
+		timeBase = temp->time_base;
+		duration = temp->duration;
+	}
+
+	// Cannot divide by 0
+	if (timeBase.den == 0)
+		return -1;
+	else
+		return 1.0 * duration * timeBase.num / (timeBase.den * 1.0);
 }

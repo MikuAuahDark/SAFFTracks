@@ -82,6 +82,7 @@ add_library(SAFFTracks MODULE
 	src/Main.cpp
 	src/SADefaultAllocator.cpp
 )
+target_compile_definitions(SAFFTracks PRIVATE _CRT_NONSTDC_NO_WARNINGS)
 target_include_directories(SAFFTracks PRIVATE ${LIBAV_INCLUDE_DIR})
 target_link_libraries(SAFFTracks ${AVCODEC_LIB} ${AVFORMAT_LIB} ${AVUTIL_LIB} ${SWRESAMPLE_LIB})
 set_target_properties(SAFFTracks PROPERTIES PREFIX "" OUTPUT_NAME "SAFFTracks" SUFFIX ".asi")

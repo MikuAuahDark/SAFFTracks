@@ -73,6 +73,7 @@ private:
 
 	bool ReadPacket();
 	bool ReadFrame(AVFrame *frame);
+	double GetStreamLength();
 };
 
 #endif

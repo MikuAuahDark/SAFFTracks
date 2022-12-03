@@ -28,10 +28,7 @@ extern uintptr_t gtasaBase;
 
 CAEUserRadioTrackManager* CAEUserRadioTrackManager::GetInstance()
 {
-	static CAEUserRadioTrackManager *instance = nullptr;
-	if (instance == nullptr)
-		instance = (CAEUserRadioTrackManager *) (gtasaBase + 0x76b970);
-	return instance;
+	return (CAEUserRadioTrackManager *) (gtasaBase + 0x76b970);
 }
 
 char* CAEUserRadioTrackManager::GetTrackPath(int trackID)
