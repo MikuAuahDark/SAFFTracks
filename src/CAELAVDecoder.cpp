@@ -30,19 +30,23 @@ extern "C"
 static int readFromDataStream(void *opaque, uint8_t *buf, int size)
 {
 	CAEDataStream *dataStream = (CAEDataStream *) opaque;
-	return dataStream->FillBuffer(buf, size);
+	int result = (int) dataStream->FillBuffer(buf, size);
+	if (result == 0 && size != 0)
+		return AVERROR_EOF;
+	return result;
 }
 
 static int64_t seekFromDataStream(void *opaque, int64_t offset, int whence)
 {
 	CAEDataStream *dataStream = (CAEDataStream *) opaque;
+	whence = whence & (~int(AVSEEK_FORCE));
 
-	if (whence == AVSEEK_SIZE)
+	if (whence | AVSEEK_SIZE)
 		return dataStream->length;
 	else
 	{
 		ULARGE_INTEGER dummy;
-		LARGE_INTEGER off;
+		LARGE_INTEGER off = {};
 		off.QuadPart = offset;
 
 		if (FAILED(dataStream->Seek(off, whence, &dummy)))
