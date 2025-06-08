@@ -20,6 +20,10 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+#define NOMINMAX
+
+#include <algorithm>
+
 #include "CAELAVDecoder.hpp"
 
 extern "C"
@@ -56,21 +60,6 @@ static int64_t seekFromDataStream(void *opaque, int64_t offset, int whence)
 	}
 }
 
-inline AVChannelLayout makeNativeChannelLayout(int nchannels, uint64_t mask)
-{
-	AVChannelLayout layout {};
-	layout.order = AV_CHANNEL_ORDER_NATIVE;
-	layout.nb_channels = nchannels;
-	layout.opaque = nullptr;
-	layout.u.mask = mask;
-	return layout;
-}
-
-#ifdef AV_CHANNEL_LAYOUT_MASK
-#undef AV_CHANNEL_LAYOUT_MASK
-#define AV_CHANNEL_LAYOUT_MASK makeNativeChannelLayout
-#endif
-
 CAELAVDecoder::CAELAVDecoder(CAEDataStream *dataStream)
 : CAEStreamingDecoder(dataStream)
 , signature("LAV")
@@ -80,10 +69,12 @@ CAELAVDecoder::CAELAVDecoder(CAEDataStream *dataStream)
 , packet(nullptr)
 , frame(nullptr)
 , resampler(nullptr)
-, targetIndex((unsigned int) -1)
+, pos(0)
+, targetIndex(-1)
 , sampleRate(0)
 , init0(false)
 , init(false)
+, frameConsumed(false)
 {
 	unsigned char *buffer = (unsigned char *) av_malloc(4096);
 	if (buffer == nullptr) return;
@@ -164,17 +155,18 @@ bool CAELAVDecoder::Initialise()
 			break;
 	}
 
-	// Find audio stream
-	for (unsigned int i = 0; targetIndex == (unsigned int) -1 && i < formatContext->nb_streams; i++)
+	// Find first audio stream
+	for (int i = 0; i < (int) formatContext->nb_streams; i++)
 	{
-		if (formatContext->streams[i]->codecpar->codec_type == AVMediaType::AVMEDIA_TYPE_AUDIO)
+		if (formatContext->streams[i]->codecpar->codec_type == AVMediaType::AVMEDIA_TYPE_AUDIO && targetIndex == -1)
 			targetIndex = i;
 		else
+			// Discard the rest
 			formatContext->streams[i]->discard = AVDiscard::AVDISCARD_ALL;
 	}
 
-	if (targetIndex == (unsigned int) -1)
-		// No audio stream, probably video-only file lol
+	if (targetIndex == -1)
+		// No audio stream, probably video-only file
 		return false;
 
 	// Find decoder for this codec
@@ -197,15 +189,15 @@ bool CAELAVDecoder::Initialise()
 		return false;
 
 	// Read single packet
-	if (!ReadFrame(frame))
+	if (ReadFrame() != ReadStatus::OK)
 		return false;
 
 	// Let's obey GTASA checks. If duration < 7s then false
 	if (GetStreamLength() < 7.0)
 		return false;
 
-	AVChannelLayout stereo = AV_CHANNEL_LAYOUT_STEREO;
-	sampleRate = frame->sample_rate > 48000 ? 48000 : frame->sample_rate;
+	constexpr AVChannelLayout stereo = AV_CHANNEL_LAYOUT_STEREO;
+	sampleRate = std::min(frame->sample_rate, 48000);
 	// Setup swr
 	if (swr_alloc_set_opts2(&resampler,
 		// output options
@@ -226,28 +218,44 @@ bool CAELAVDecoder::Initialise()
 
 size_t CAELAVDecoder::FillBuffer(void *dest, size_t size)
 {
-	// We always assume s16 and 2 channels, hence division by 4
-	int sampleCount = size >> 2;
-	int amountOfDecoded = 0;
-	int32_t *buf = (int32_t *) dest;
+	// We always assume s16 and 2 channels, so divide by 4
+	constexpr int sampleFrame = sizeof(int16_t) * 2;
+	int sampleCount = size / sampleFrame;
+	size_t amountOfDecoded = 0;
+	uint8_t *buf = (uint8_t *) dest;
 
 	// Fill the buffers until full
 	while (sampleCount > 0)
 	{
-		if (!ReadFrame(frame))
-			break;
+		uint8_t **frameData = nullptr;
+		int frameSampleCount = 0;
 
-		uint8_t *outbuf[2] = {(uint8_t *) buf, nullptr};
-		// Resample
-		int decoded = swr_convert(resampler, outbuf, sampleCount, (const uint8_t **) &frame->data[0], frame->nb_samples);
+		int remaining = swr_get_out_samples(resampler, 0);
+		if (remaining < sampleCount)
+		{
+			if (ReadFrame() == ReadStatus::OK)
+			{
+				frameData = frame->data;
+				frameSampleCount = frame->nb_samples;
+			}
+			else if (remaining == 0)
+			{
+				// No more samples
+				break;
+			}
+		}
+
+		uint8_t *outbuf[2] = {buf, nullptr};
+		int decoded = std::max(swr_convert(resampler, outbuf, sampleCount, frameData, frameSampleCount), 0);
+		frameConsumed = frameData != nullptr;
 
 		// Update
 		amountOfDecoded += decoded;
 		sampleCount -= decoded;
-		buf += decoded;
+		buf += decoded * sampleFrame;
 	}
 
-	return amountOfDecoded * 4;
+	return amountOfDecoded * sampleFrame;
 }
 
 long CAELAVDecoder::GetStreamLengthMs()
@@ -263,40 +271,31 @@ long CAELAVDecoder::GetStreamPlayTimeMs()
 	if (!init)
 		return -1;
 
-	AVRational &timeBase = formatContext->streams[targetIndex]->time_base;
-	if (timeBase.den == 0)
-		return -1;
-
-	return (long) (frame->pts * timeBase.num * 1000 / timeBase.den);
+	return (long) (std::max(pos, 0.0) * 1000.0);
 }
 
 void CAELAVDecoder::SetCursor(unsigned long pos)
 {
-	AVRational &timeBase = formatContext->streams[targetIndex]->time_base;
-	if (timeBase.den == 0)
-		// Cannot divide by 0
-		return;
+	constexpr AVRational timeBase = {1, AV_TIME_BASE};
 
 	// Convert to stream-specific timestamp
 	int64_t ts = int64_t(pos) * timeBase.den / (timeBase.num * 1000ULL);
+
 	// Flush decode buffers
+	avformat_flush(formatContext);
 	avcodec_flush_buffers(codecContext);
 	
 	if (resampler)
 	{
 		// Flush resampler
+		swr_convert(resampler, nullptr, 0, nullptr, 0);
 		int outSize = swr_get_out_samples(resampler, 0);
 		if (outSize > 0)
-		{
-			// s16, 2 channels, lshift by 2
-			uint8_t *buffers[2] = {(uint8_t *) av_malloc(outSize << 2), nullptr};
-			swr_convert(resampler, buffers, outSize, nullptr, 0);
-			av_free(buffers[0]);
-		}
+			swr_drop_output(resampler, outSize);
 	}
 
 	// Seek
-	av_seek_frame(formatContext, targetIndex, ts, AVSEEK_FLAG_BACKWARD);
+	avformat_seek_file(formatContext, -1, std::numeric_limits<int64_t>::min(), ts, std::numeric_limits<int64_t>::max(), 0);
 }
 
 int CAELAVDecoder::GetSampleRate()
@@ -309,45 +308,70 @@ int CAELAVDecoder::GetStreamID()
 	return dataStream->trackID;
 }
 
-bool CAELAVDecoder::ReadPacket()
+CAELAVDecoder::ReadStatus CAELAVDecoder::ReadPacket()
 {
-	if (packet->buf != nullptr)
-		av_packet_unref(packet);
-
 	do
 	{
-		if (av_read_frame(formatContext, packet) < 0)
-			return false;
+		if (packet->buf != nullptr)
+			av_packet_unref(packet);
+
+		int r = av_read_frame(formatContext, packet);
+		if (r >= 0)
+			return ReadStatus::OK;
+		else if (r == AVERROR_EOF)
+			return ReadStatus::End;
+		else
+			return ReadStatus::Error;
 	}
 	while (packet->stream_index != targetIndex);
 
-	return true;
+	return ReadStatus::Error;
 }
 
-bool CAELAVDecoder::ReadFrame(AVFrame *frame)
+CAELAVDecoder::ReadStatus CAELAVDecoder::ReadFrame()
 {
-	// FFmpeg 4.0's send/receive style API
-	if (frame->buf[0] != nullptr)
+	if (frame->buf[0])
+	{
+		if (!frameConsumed)
+			return ReadStatus::OK;
+
 		av_frame_unref(frame);
+	}
+
+	frameConsumed = false;
 
 	while (true)
 	{
-		if (!ReadPacket())
-			return false;
-
-		int r = avcodec_send_packet(codecContext, packet);
-		if (r < 0)
-			return false;
-
-		while (r >= 0)
+		// Pull frame
+		int r = avcodec_receive_frame(codecContext, frame);
+		if (r == AVERROR_EOF)
+			return ReadStatus::End;
+		else if (r == AVERROR(EAGAIN))
 		{
-			r = avcodec_receive_frame(codecContext, frame);
-			if (r == AVERROR(EAGAIN))
-				break;
-			else if (r < 0)
-				return false;
+			// No frame to be pulled. Send some packet
+			AVPacket *targetPacket = nullptr;
+			ReadStatus rs = ReadPacket();
+			if (rs == ReadStatus::Error)
+				return ReadStatus::Error;
+			else if (rs == ReadStatus::OK)
+				targetPacket = packet;
 
-			return true;
+			int r = avcodec_send_packet(codecContext, targetPacket);
+			if (r == AVERROR_EOF)
+				return ReadStatus::End;
+			else if (r < 0)
+				return ReadStatus::Error;
+		}
+		else if (r < 0)
+			return ReadStatus::Error;
+		else
+		{
+			// Successfully got frame. Compute position
+			const AVRational &timeBase = formatContext->streams[targetIndex]->time_base;
+			if (timeBase.den != 0)
+				pos = (1.0 * frame->pts * timeBase.num / (timeBase.den * 1.0));
+
+			return ReadStatus::OK;
 		}
 	}
 }

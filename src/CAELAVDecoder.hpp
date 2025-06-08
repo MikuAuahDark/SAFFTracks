@@ -57,6 +57,11 @@ public:
 	};
 
 private:
+	enum class ReadStatus
+	{
+		OK, End, Error
+	};
+
 	char signature[4];
 	Metadata metadata;
 	AVFormatContext *formatContext;
@@ -66,13 +71,15 @@ private:
 	AVFrame *frame;
 	SwrContext *resampler;
 
-	unsigned int targetIndex;
+	double pos;
+	int targetIndex;
 	int sampleRate;
 	bool init0;
 	bool init;
+	bool frameConsumed;
 
-	bool ReadPacket();
-	bool ReadFrame(AVFrame *frame);
+	ReadStatus ReadPacket();
+	ReadStatus ReadFrame();
 	double GetStreamLength();
 };
 
