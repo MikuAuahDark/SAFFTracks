@@ -45,7 +45,7 @@ static int64_t seekFromDataStream(void *opaque, int64_t offset, int whence)
 	CAEDataStream *dataStream = (CAEDataStream *) opaque;
 	whence = whence & (~int(AVSEEK_FORCE));
 
-	if (whence | AVSEEK_SIZE)
+	if (whence & AVSEEK_SIZE)
 		return dataStream->length;
 	else
 	{
